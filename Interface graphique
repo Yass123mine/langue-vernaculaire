@@ -1,0 +1,209 @@
+#include "game.h"
+#include "ui.h"
+#include <math.h>
+
+/* =========================
+NOUVELLE PALETTE MODERNE
+========================= */
+#define COL_BG          (SDL_Color){245,248,252,255}
+#define COL_PRIMARY     (SDL_Color){64,120,192,255}
+#define COL_PRIMARY_SOFT (SDL_Color){64,120,192,40}
+#define COL_ACCENT      (SDL_Color){255,180,0,255}
+#define COL_SUCCESS     (SDL_Color){46,204,113,255}
+#define COL_ERROR       (SDL_Color){231,76,60,255}
+#define COL_TEXT        (SDL_Color){40,40,40,255}
+#define COL_SUBTEXT     (SDL_Color){120,120,120,255}
+
+/* =========================
+CARTE MODERNE
+========================= */
+void uiDrawCardModern(UIContext *ui, SDL_Rect rect) {
+SDL_Renderer *r = ui->renderer;
+
+```
+SDL_Rect shadow = {rect.x, rect.y + 6, rect.w, rect.h};
+uiRoundRect(r, shadow, 16, (SDL_Color){0,0,0,30});
+
+uiRoundRect(r, rect, 16, COL_WHITE);
+```
+
+}
+
+/* =========================
+BARRE HAUT (AMELIOREE)
+========================= */
+void drawTopBar(GameCtx *ctx) {
+UIContext *ui = ctx->ui;
+SDL_Renderer *r = ctx->renderer;
+
+```
+SDL_Rect bar = {0, 0, WIN_W, 64};
+uiRoundRect(r, bar, 0, COL_PRIMARY);
+
+uiDrawText(ui, "CAMlex", ui->fontLarge, COL_WHITE, 20, 14);
+
+char lvltxt[32];
+sprintf(lvltxt, "Niv. %d", ctx->joueur.niveau);
+uiDrawText(ui, lvltxt, ui->fontSmall, COL_WHITE, 200, 22);
+
+if (ctx->estConnecte) {
+    for (int i = 0; i < 5; i++) {
+        SDL_Color hc = (i < ctx->joueur.coeurs) ?
+                       COL_WHITE :
+                       (SDL_Color){255,255,255,60};
+        uiDrawHeart(r, WIN_W - 260 + i * 32, 32, 14, hc);
+    }
+
+    uiDrawCoin(r, WIN_W - 100, 32, 14);
+
+    char coins[20];
+    sprintf(coins, "%d", ctx->joueur.pieces);
+    uiDrawText(ui, coins, ui->fontSmall, COL_WHITE, WIN_W - 82, 22);
+
+    uiDrawText(ui, ctx->joueur.nom, ui->fontSmall, COL_WHITE, WIN_W - 230, 22);
+}
+```
+
+}
+
+/* =========================
+FEEDBACK AVEC ANIMATION
+========================= */
+void drawFeedback(GameCtx *ctx) {
+if (ctx->feedbackMsg[0] == 0) return;
+
+```
+int now = SDL_GetTicks();
+if (now > (int)ctx->feedbackTimer) {
+    ctx->feedbackMsg[0] = 0;
+    return;
+}
+
+float alpha = (ctx->feedbackTimer - now) / 2500.0f;
+if (alpha < 0) alpha = 0;
+
+SDL_Rect fb = {WIN_W/2 - 250, WIN_H - 80, 500, 48};
+
+SDL_SetRenderDrawBlendMode(ctx->renderer, SDL_BLENDMODE_BLEND);
+uiRoundRect(ctx->renderer, fb, 12, (SDL_Color){
+    ctx->feedbackCol.r,
+    ctx->feedbackCol.g,
+    ctx->feedbackCol.b,
+    (Uint8)(200 * alpha)
+});
+SDL_SetRenderDrawBlendMode(ctx->renderer, SDL_BLENDMODE_NONE);
+
+uiDrawTextRect(ctx->ui, ctx->feedbackMsg,
+               ctx->ui->fontSmall, COL_WHITE, fb);
+```
+
+}
+
+/* =========================
+TEXTFIELD MODERNE
+========================= */
+void tfDraw(UIContext *ui, const TextField *tf) {
+SDL_Renderer *r = ui->renderer;
+
+```
+SDL_Color border = tf->active ? COL_PRIMARY : COL_SUBTEXT;
+
+uiShadow(r, tf->rect, 10, 3);
+uiRoundBorder(r, tf->rect, 12, COL_WHITE, border, 2);
+
+const char *txt = (tf->buffer[0] != 0) ? tf->buffer : tf->placeholder;
+SDL_Color col = (tf->buffer[0] != 0) ? COL_TEXT : COL_SUBTEXT;
+
+uiDrawText(ui, txt, ui->fontMedium, col,
+           tf->rect.x + 14, tf->rect.y + 12);
+
+if (tf->active && (SDL_GetTicks() / 500) % 2 == 0) {
+    int cw, ch;
+    TTF_SizeUTF8(ui->fontMedium, tf->buffer, &cw, &ch);
+
+    SDL_SetRenderDrawColor(r, 64,120,192,255);
+    SDL_RenderDrawLine(r,
+        tf->rect.x + 14 + cw, tf->rect.y + 10,
+        tf->rect.x + 14 + cw, tf->rect.y + tf->rect.h - 10);
+}
+```
+
+}
+
+/* =========================
+BOUTONS AVEC HOVER SMOOTH
+========================= */
+void updateAndDrawBtns(GameCtx *ctx) {
+float dt = 0.016f;
+
+```
+for (int i = 0; i < ctx->nbBtns; i++) {
+    Button *b = &ctx->btns[i];
+
+    btnUpdate(b, ctx->mouseX, ctx->mouseY, ctx->mouseClicked);
+
+    if (b->hovered) b->hoverAnim += dt * 6;
+    else b->hoverAnim -= dt * 6;
+
+    if (b->hoverAnim < 0) b->hoverAnim = 0;
+    if (b->hoverAnim > 1) b->hoverAnim = 1;
+
+    SDL_Color c = {
+        b->colorNormal.r + (b->colorHover.r - b->colorNormal.r) * b->hoverAnim,
+        b->colorNormal.g + (b->colorHover.g - b->colorNormal.g) * b->hoverAnim,
+        b->colorNormal.b + (b->colorHover.b - b->colorNormal.b) * b->hoverAnim,
+        255
+    };
+
+    uiRoundRect(ctx->renderer, b->rect, 14, c);
+    uiDrawTextCentered(ctx->ui, b->label, ctx->ui->fontSmall,
+                       b->colorText,
+                       b->rect.x + b->rect.w/2,
+                       b->rect.y + b->rect.h/2 - 10);
+}
+```
+
+}
+
+/* =========================
+PROGRESS BAR MODERNE
+========================= */
+void uiProgressBarModern(UIContext *ui, SDL_Rect rect, float pct) {
+SDL_Renderer *r = ui->renderer;
+
+```
+uiRoundRect(r, rect, rect.h/2, (SDL_Color){220,220,220,255});
+
+SDL_Rect fill = rect;
+fill.w = rect.w * pct;
+
+uiRoundRect(r, fill, rect.h/2, COL_PRIMARY);
+```
+
+}
+
+/* =========================
+DISPATCH PRINCIPAL
+========================= */
+void gameDraw(GameCtx *ctx) {
+SDL_SetRenderDrawColor(ctx->renderer, 245,248,252,255);
+SDL_RenderClear(ctx->renderer);
+
+```
+switch (ctx->state) {
+    case STATE_LOGIN:          drawLogin(ctx);         break;
+    case STATE_NEW_USER:       drawNewUser(ctx);       break;
+    case STATE_CONNECT_USER:   drawConnectUser(ctx);   break;
+    case STATE_MAIN_MENU:      drawMainMenu(ctx);      break;
+    case STATE_LESSON_SELECT:  drawLessonSelect(ctx);  break;
+    case STATE_LESSON_VIEW:    drawLessonView(ctx);    break;
+    case STATE_QUIZ:           drawQuiz(ctx);          break;
+    case STATE_QUIZ_RESULT:    drawQuizResult(ctx);    break;
+    case STATE_PROGRESS:       drawProgress(ctx);      break;
+    default: break;
+}
+
+SDL_RenderPresent(ctx->renderer);
+```
+
+}
